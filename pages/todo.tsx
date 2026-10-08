@@ -1,6 +1,4 @@
 import { useState } from "react";
-import axios from "axios";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActionIcon,
   Button,
@@ -13,65 +11,31 @@ import {
   Title,
 } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
-
-type TodoItem = {
-  id: string;
-  title: string;
-};
-
-const fetchTodos = async (): Promise<TodoItem[]> => {
-  const { data } = await axios.get<TodoItem[]>("/api/todo");
-  return data;
-};
-
-const createTodo = async (title: string): Promise<TodoItem> => {
-  const { data } = await axios.post<TodoItem>("/api/todo", { title });
-  return data;
-};
-
-const deleteTodo = async (id: string): Promise<string> => {
-  await axios.delete(`/api/todo/${id}`);
-  return id;
-};
+import { useTodo } from "@/lib/frontend/hooks/useTodo";
 
 export default function TodoPage() {
-  const queryClient = useQueryClient();
   const [newTodo, setNewTodo] = useState("");
-
-  const { data: todos = [], isLoading, isError, error } = useQuery({
-    queryKey: ["todos"],
-    queryFn: fetchTodos,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: createTodo,
-    onSuccess: (newItem) => {
-      queryClient.setQueryData<TodoItem[]>(["todos"], (currentTodos = []) => [
-        ...currentTodos,
-        newItem,
-      ]);
-      setNewTodo("");
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteTodo,
-    onSuccess: (deletedId) => {
-      queryClient.setQueryData<TodoItem[]>(["todos"], (currentTodos = []) =>
-        currentTodos.filter((todo) => todo.id !== deletedId)
-      );
-    },
-  });
+  const {
+    todos,
+    isLoading,
+    isError,
+    error,
+    createTodo,
+    deleteTodo,
+    isCreating,
+    isDeleting,
+  } = useTodo();
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedTodo = newTodo.trim();
 
-    if (!trimmedTodo || createMutation.isPending) {
+    if (!trimmedTodo || isCreating) {
       return;
     }
 
-    createMutation.mutate(trimmedTodo);
+    createTodo(trimmedTodo);
+    setNewTodo("");
   };
 
   return (
@@ -92,12 +56,12 @@ export default function TodoPage() {
               placeholder="Adicionar nova tarefa..."
               className="flex-1"
               aria-label="Nova tarefa"
-              disabled={createMutation.isPending}
+              disabled={isCreating}
             />
             <Button
               type="submit"
               leftSection={<IconPlus size={16} />}
-              loading={createMutation.isPending}
+              loading={isCreating}
             >
               Adicionar
             </Button>
@@ -111,7 +75,7 @@ export default function TodoPage() {
             </Card>
           ) : isError ? (
             <Card withBorder radius="lg" p="lg">
-              <Text c="red">Erro ao carregar as tarefas: {error?.message}</Text>
+              <Text c="red">Erro ao carregar as tarefas: {(error as Error)?.message}</Text>
             </Card>
           ) : todos.length === 0 ? (
             <Card withBorder radius="lg" p="xl">
@@ -131,8 +95,8 @@ export default function TodoPage() {
                     variant="light"
                     color="red"
                     aria-label={`Eliminar ${todo.title}`}
-                    onClick={() => deleteMutation.mutate(todo.id)}
-                    disabled={deleteMutation.isPending}
+                    onClick={() => deleteTodo(todo.id)}
+                    disabled={isDeleting}
                   >
                     <IconTrash size={16} />
                   </ActionIcon>
